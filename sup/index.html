@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка баланса СУП</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid var(--tg-theme-hint-color);
+            border-radius: 8px;
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            background-color: var(--tg-theme-secondary-bg-color);
+            color: var(--tg-theme-text-color);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: var(--tg-theme-secondary-bg-color);
+        }
+        .error {
+            color: var(--tg-theme-destructive-text-color);
+        }
+        .saved-indicator {
+            text-align: center;
+            font-size: 12px;
+            color: var(--tg-theme-hint-color);
+            margin-top: 5px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .saved-indicator.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Проверка баланса карты СУП</h2>
+        
+        <input 
+            type="text" 
+            id="cardInput" 
+            placeholder="0-000000-000000"
+            maxlength="15"
+            inputmode="numeric">
+        
+        <div id="savedIndicator" class="saved-indicator">✓ Сохранено</div>
+        
+        <div id="result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        const storage = tg.CloudStorage;
+        const cardInput = document.getElementById('cardInput');
+        const savedIndicator = document.getElementById('savedIndicator');
+        
+        let saveTimeout;
+
+        // Загрузка сохраненного номера карты при запуске
+        storage.getItem('card_number', (err, value) => {
+            if (!err && value) {
+                cardInput.value = value;
+            }
+        });
+
+        // Настройка главной кнопки для проверки баланса
+        tg.MainButton.setText('Проверить баланс');
+        tg.MainButton.show();
+        tg.MainButton.onClick(checkBalance);
+
+        // Автосохранение номера карты с дебаунсом
+        cardInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            
+            // Применение маски x-xxxxxx-xxxxxx
+            let formatted = '';
+            if (value.length > 0) {
+                formatted = value.substring(0, 1);
+                if (value.length > 1) {
+                    formatted += '-' + value.substring(1, 7);
+                }
+                if (value.length > 7) {
+                    formatted += '-' + value.substring(7, 13);
+                }
+            }
+            
+            e.target.value = formatted;
+
+            // Автосохранение с задержкой 500мс после последнего ввода
+            clearTimeout(saveTimeout);
+            
+            if (formatted.length > 0) {
+                saveTimeout = setTimeout(() => {
+                    storage.setItem('card_number', formatted, (err, saved) => {
+                        if (!err && saved) {
+                            showSavedIndicator();
+                            tg.HapticFeedback.impactOccurred('light');
+                        }
+                    });
+                }, 500);
+            }
+        });
+
+        function showSavedIndicator() {
+            savedIndicator.classList.add('show');
+            setTimeout(() => {
+                savedIndicator.classList.remove('show');
+            }, 1500);
+        }
+
+        async function checkBalance() {
+            const cardNumber = cardInput.value.replace(/\D/g, '');
+            
+            if (!cardNumber || cardNumber.length !== 13) {
+                tg.showAlert('Введите корректный номер карты (13 цифр)');
+                return;
+            }
+
+            tg.MainButton.showProgress();
+            
+            try {
+                // Замените URL на реальный API СУП
+                // Возможные варианты параметра: ?card=, ?cardNumber=, или другой
+                const response = await fetch(`https://meal.gift-cards.ru/api/1/cards/${cardNumber}?limit=100`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = `
+                    <h3>Баланс карты</h3>
+                    <p><strong>Номер карты:</strong> ${formatCardNumber(cardNumber)}</p>
+                    <p><strong>Баланс:</strong> ${data.balance} ₽</p>
+                `;
+                
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (error) {
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = `<p class="error">Ошибка при получении данных: ${error.message}</p>`;
+                tg.HapticFeedback.notificationOccurred('error');
+            } finally {
+                tg.MainButton.hideProgress();
+            }
+        }
+
+        function formatCardNumber(cardNumber) {
+            return cardNumber.substring(0, 1) + '-' + 
+                   cardNumber.substring(1, 7) + '-' + 
+                   cardNumber.substring(7, 13);
+        }
+
+        // Блокировка закрытия приложения при несохраненных изменениях
+        tg.enableClosingConfirmation();
+    </script>
+</body>
+</html>
