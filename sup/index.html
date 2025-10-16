@@ -220,8 +220,7 @@
     </div>
 
     <script>
-        // Используем cors.lol для обхода CORS
-        const CORS_PROXY = 'https://proxy.corsfix.com/?';
+        const CORS_PROXY = 'https://api.codetabs.com/v1/proxy/?quest=';
         const API_BASE_URL = 'https://meal.gift-cards.ru/api/1/cards/';
 
         // Инициализация Telegram Web App
@@ -334,7 +333,6 @@
                 
                 console.log('Запрос к:', proxyUrl);
                 
-                // Запрос через cors.lol
                 const response = await fetch(proxyUrl, {
                     method: 'GET',
                     headers: {
