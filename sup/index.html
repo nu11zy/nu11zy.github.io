@@ -344,7 +344,20 @@
                     throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
                 }
                 
-                const data = await response.json();
+                const proxyData = await response.json();
+                
+                // Парсим ответ CORS прокси: {status, body}
+                if (proxyData.status !== 200) {
+                    throw new Error(`HTTP ${proxyData.status}: ${proxyData.body || 'Неизвестная ошибка'}`);
+                }
+                
+                // Парсим тело ответа (может быть строка или объект)
+                let data;
+                if (typeof proxyData.body === 'string') {
+                    data = JSON.parse(proxyData.body);
+                } else {
+                    data = proxyData.body;
+                }
                 
                 // Проверка структуры ответа
                 if (data.status !== 'OK' || !data.data) {
